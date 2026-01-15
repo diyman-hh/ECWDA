@@ -1,0 +1,38 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build WebDriverAgentRunner
+        run: |
+          xcodebuild -project WebDriverAgent.xcodeproj \
+            -scheme WebDriverAgentRunner \
+            -destination 'generic/platform=iOS' \
+            -configuration Release \
+            clean build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            -derivedDataPath build
+
+      - name: Create IPA
+        run: |
+          mkdir Payload
+          # Adjust path based on where xcodebuild puts the app
+          cp -r build/Build/Products/Release-iphoneos/WebDriverAgentRunner-Runner.app Payload/
+          zip -r WDA.ipa Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: WDA_IPA
+          path: WDA.ipa
