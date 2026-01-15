@@ -20,8 +20,9 @@ jobs:
             -destination 'generic/platform=iOS' \
             -configuration Release \
             clean build \
-            CODE_SIGN_IDENTITY="" \
+            code_sign_identity="" \
             CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
             -derivedDataPath build
 
       - name: Create IPA
