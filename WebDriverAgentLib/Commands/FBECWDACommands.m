@@ -246,6 +246,26 @@
     [[FBRoute GET:@"/wda/app/list"].withoutSession
         respondWithTarget:self
                    action:@selector(handleGetAppList:)],
+
+    // ===== YOLO 目标检测 =====
+
+    // YOLO 检测
+    [[FBRoute POST:@"/wda/yolo/detect"].withoutSession
+        respondWithTarget:self
+                   action:@selector(handleYOLODetect:)],
+    [[FBRoute POST:@"/wda/yolo/detect"]
+        respondWithTarget:self
+                   action:@selector(handleYOLODetect:)],
+
+    // 加载 YOLO 模型
+    [[FBRoute POST:@"/wda/yolo/loadModel"].withoutSession
+        respondWithTarget:self
+                   action:@selector(handleYOLOLoadModel:)],
+
+    // 获取模型信息
+    [[FBRoute GET:@"/wda/yolo/modelInfo"].withoutSession
+        respondWithTarget:self
+                   action:@selector(handleYOLOModelInfo:)],
   ];
 }
 
@@ -1554,6 +1574,203 @@ static NSMutableArray *scriptLog = nil;
   // 获取已安装应用列表需要私有 API，这里返回一个简化版本
   return FBResponseWithObject(
       @{@"apps" : @[], @"note" : @"Full app list requires private APIs"});
+}
+
+#pragma mark - YOLO Detection
+
+// 静态变量存储模型
+static VNCoreMLModel *yoloModel = nil;
+static NSString *yoloModelName = nil;
+static NSArray *yoloClassLabels = nil;
+
++ (id<FBResponsePayload>)handleYOLOLoadModel:(FBRouteRequest *)request {
+  NSString *modelName = request.arguments[@"modelName"];
+  NSArray *classLabels = request.arguments[@"classLabels"];
+
+  if (!modelName) {
+    return FBResponseWithStatus([FBCommandStatus
+        invalidArgumentErrorWithMessage:@"modelName is required"
+                              traceback:nil]);
+  }
+
+  // 尝试从 bundle 中加载模型
+  NSURL *modelURL = [[NSBundle mainBundle] URLForResource:modelName
+                                            withExtension:@"mlmodelc"];
+
+  if (!modelURL) {
+    // 尝试从 Documents 目录加载
+    NSString *documentsPath = NSSearchPathForDirectoriesInDomains(
+                                  NSDocumentDirectory, NSUserDomainMask, YES)
+                                  .firstObject;
+    NSString *modelPath = [documentsPath
+        stringByAppendingPathComponent:[NSString
+                                           stringWithFormat:@"%@.mlmodelc",
+                                                            modelName]];
+    modelURL = [NSURL fileURLWithPath:modelPath];
+  }
+
+  if (![[NSFileManager defaultManager] fileExistsAtPath:modelURL.path]) {
+    return FBResponseWithStatus([FBCommandStatus
+        invalidArgumentErrorWithMessage:
+            [NSString stringWithFormat:@"Model not found: %@", modelName]
+                              traceback:nil]);
+  }
+
+  NSError *error;
+
+  // 加载 CoreML 模型
+  if (@available(iOS 12.0, *)) {
+    MLModel *mlModel = [MLModel modelWithContentsOfURL:modelURL error:&error];
+    if (error) {
+      return FBResponseWithUnknownError(error);
+    }
+
+    yoloModel = [VNCoreMLModel modelForMLModel:mlModel error:&error];
+    if (error) {
+      return FBResponseWithUnknownError(error);
+    }
+
+    yoloModelName = modelName;
+    yoloClassLabels = classLabels;
+
+    return FBResponseWithObject(@{
+      @"success" : @YES,
+      @"modelName" : modelName,
+      @"message" : @"Model loaded successfully"
+    });
+  } else {
+    return FBResponseWithStatus([FBCommandStatus
+        unsupportedOperationErrorWithMessage:@"YOLO requires iOS 12+"
+                                   traceback:nil]);
+  }
+}
+
++ (id<FBResponsePayload>)handleYOLOModelInfo:(FBRouteRequest *)request {
+  return FBResponseWithObject(@{
+    @"loaded" : @(yoloModel != nil),
+    @"modelName" : yoloModelName ?: [NSNull null],
+    @"classLabels" : yoloClassLabels ?: @[]
+  });
+}
+
++ (id<FBResponsePayload>)handleYOLODetect:(FBRouteRequest *)request {
+  // YOLO 目标检测
+  NSDictionary *region = request.arguments[@"region"];
+  NSNumber *confidence = request.arguments[@"confidence"] ?: @(0.5);
+  NSNumber *maxResults = request.arguments[@"maxResults"] ?: @(10);
+
+  // 检查模型是否已加载
+  if (!yoloModel) {
+    return FBResponseWithStatus([FBCommandStatus
+        sessionNotCreatedErrorWithMessage:
+            @"No YOLO model loaded. Call /wda/yolo/loadModel first"
+                                traceback:nil]);
+  }
+
+  // 截取屏幕
+  NSError *error;
+  UIImage *screenshot = [[XCUIScreen mainScreen] fb_takeScreenshot:&error];
+  if (!screenshot) {
+    return FBResponseWithUnknownError(error);
+  }
+
+  // 裁剪区域
+  if (region) {
+    CGFloat x = [region[@"x"] floatValue];
+    CGFloat y = [region[@"y"] floatValue];
+    CGFloat w = [region[@"width"] floatValue];
+    CGFloat h = [region[@"height"] floatValue];
+
+    CGRect cropRect = CGRectMake(x, y, w, h);
+    CGImageRef imageRef =
+        CGImageCreateWithImageInRect(screenshot.CGImage, cropRect);
+    screenshot = [UIImage imageWithCGImage:imageRef];
+    CGImageRelease(imageRef);
+  }
+
+  if (@available(iOS 12.0, *)) {
+    // 创建 Vision 请求
+    __block NSMutableArray *detections = [NSMutableArray array];
+
+    VNCoreMLRequest *request = [[VNCoreMLRequest alloc]
+            initWithModel:yoloModel
+        completionHandler:^(VNRequest *req, NSError *err) {
+          if (err) {
+            return;
+          }
+
+          CGFloat imageWidth = screenshot.size.width;
+          CGFloat imageHeight = screenshot.size.height;
+          CGFloat confThreshold = confidence.floatValue;
+          NSInteger maxCount = maxResults.integerValue;
+
+          for (VNRecognizedObjectObservation *observation in req.results) {
+            if (detections.count >= maxCount)
+              break;
+            if (observation.confidence < confThreshold)
+              continue;
+
+            CGRect boundingBox = observation.boundingBox;
+
+            // 转换坐标系 (Vision 使用左下角为原点)
+            CGFloat x = boundingBox.origin.x * imageWidth;
+            CGFloat y = (1 - boundingBox.origin.y - boundingBox.size.height) *
+                        imageHeight;
+            CGFloat w = boundingBox.size.width * imageWidth;
+            CGFloat h = boundingBox.size.height * imageHeight;
+
+            // 获取分类标签
+            NSString *label = @"object";
+            CGFloat labelConfidence = observation.confidence;
+
+            if (observation.labels.count > 0) {
+              VNClassificationObservation *topLabel =
+                  observation.labels.firstObject;
+              label = topLabel.identifier;
+              labelConfidence = topLabel.confidence;
+
+              // 如果有自定义标签，尝试匹配
+              if (yoloClassLabels && yoloClassLabels.count > 0) {
+                NSInteger labelIndex = [label integerValue];
+                if (labelIndex >= 0 && labelIndex < yoloClassLabels.count) {
+                  label = yoloClassLabels[labelIndex];
+                }
+              }
+            }
+
+            [detections addObject:@{
+              @"label" : label,
+              @"confidence" : @(labelConfidence),
+              @"x" : @(x),
+              @"y" : @(y),
+              @"width" : @(w),
+              @"height" : @(h),
+              @"centerX" : @(x + w / 2),
+              @"centerY" : @(y + h / 2)
+            }];
+          }
+        }];
+
+    request.imageCropAndScaleOption = VNImageCropAndScaleOptionScaleFill;
+
+    // 执行检测
+    VNImageRequestHandler *handler =
+        [[VNImageRequestHandler alloc] initWithCGImage:screenshot.CGImage
+                                               options:@{}];
+    NSError *performError;
+    [handler performRequests:@[ request ] error:&performError];
+
+    if (performError) {
+      return FBResponseWithUnknownError(performError);
+    }
+
+    return FBResponseWithObject(
+        @{@"detections" : detections, @"count" : @(detections.count)});
+  } else {
+    return FBResponseWithStatus([FBCommandStatus
+        unsupportedOperationErrorWithMessage:@"YOLO requires iOS 12+"
+                                   traceback:nil]);
+  }
 }
 
 @end

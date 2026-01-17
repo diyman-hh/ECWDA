@@ -1275,6 +1275,125 @@ class ECWDA:
             return resp.json().get("value", {})
         except:
             return {}
+    
+    # ========== YOLO 目标检测 ==========
+    
+    def yolo_load_model(self, model_name: str, class_labels: Optional[List[str]] = None) -> Dict:
+        """
+        加载 YOLO CoreML 模型
+        
+        Args:
+            model_name: 模型名称 (不含扩展名)
+            class_labels: 类别标签列表
+            
+        Returns:
+            dict: 加载结果
+            
+        说明:
+            模型需要先放到以下位置之一:
+            1. App Bundle 中 (编译时添加)
+            2. Documents 目录中 (运行时复制)
+        """
+        try:
+            payload = {"modelName": model_name}
+            if class_labels:
+                payload["classLabels"] = class_labels
+            
+            resp = requests.post(
+                f"{self.base_url}/wda/yolo/loadModel",
+                json=payload,
+                timeout=30
+            )
+            return resp.json().get("value", {})
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def yolo_detect(self, confidence: float = 0.5, max_results: int = 10,
+                    region: Optional[Dict] = None) -> List[Dict]:
+        """
+        YOLO 目标检测
+        
+        Args:
+            confidence: 置信度阈值 (0-1)
+            max_results: 最大返回数量
+            region: 检测区域 {"x", "y", "width", "height"}
+            
+        Returns:
+            list: 检测结果列表
+            [
+                {
+                    "label": "person",
+                    "confidence": 0.95,
+                    "x": 100, "y": 200,
+                    "width": 50, "height": 100,
+                    "centerX": 125, "centerY": 250
+                },
+                ...
+            ]
+        """
+        try:
+            payload = {"confidence": confidence, "maxResults": max_results}
+            if region:
+                payload["region"] = region
+            
+            resp = requests.post(
+                f"{self.base_url}/wda/yolo/detect",
+                json=payload,
+                timeout=30
+            )
+            data = resp.json().get("value", {})
+            return data.get("detections", [])
+        except:
+            return []
+    
+    def yolo_find(self, label: str, confidence: float = 0.5) -> Optional[Dict]:
+        """
+        查找指定标签的目标
+        
+        Args:
+            label: 目标标签
+            confidence: 置信度阈值
+            
+        Returns:
+            dict: 找到的第一个目标，未找到返回 None
+        """
+        detections = self.yolo_detect(confidence=confidence)
+        for det in detections:
+            if det.get("label", "").lower() == label.lower():
+                return det
+        return None
+    
+    def yolo_click(self, label: str, confidence: float = 0.5) -> bool:
+        """
+        点击 YOLO 检测到的目标
+        
+        Args:
+            label: 目标标签
+            confidence: 置信度阈值
+            
+        Returns:
+            bool: 是否成功
+        """
+        target = self.yolo_find(label, confidence)
+        if target:
+            return self.click(int(target["centerX"]), int(target["centerY"]))
+        return False
+    
+    def yolo_model_info(self) -> Dict:
+        """
+        获取当前加载的 YOLO 模型信息
+        
+        Returns:
+            dict: 模型信息
+        """
+        try:
+            resp = requests.get(
+                f"{self.base_url}/wda/yolo/modelInfo",
+                timeout=self.timeout
+            )
+            return resp.json().get("value", {})
+        except:
+            return {}
 
 
 # 便捷函数
