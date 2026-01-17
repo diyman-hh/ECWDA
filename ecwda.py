@@ -627,6 +627,143 @@ class ECWDA:
                 return pos
             time.sleep(interval)
         return None
+    
+    # ========== 脱机脚本执行 ==========
+    
+    def execute_script(self, commands: List[Dict], script_id: Optional[str] = None) -> Dict:
+        """
+        执行脚本 (脱机模式)
+        
+        Args:
+            commands: 命令列表
+            script_id: 脚本 ID
+            
+        Returns:
+            dict: 执行结果
+        """
+        try:
+            payload = {"commands": commands}
+            if script_id:
+                payload["scriptId"] = script_id
+                
+            resp = requests.post(
+                f"{self.base_url}/wda/script/execute",
+                json=payload,
+                timeout=self.timeout
+            )
+            return resp.json().get("value", {})
+        except Exception as e:
+            return {"error": str(e)}
+    
+    def get_script_status(self) -> Dict:
+        """
+        获取脚本执行状态
+        
+        Returns:
+            dict: 状态信息
+        """
+        try:
+            resp = requests.get(
+                f"{self.base_url}/wda/script/status",
+                timeout=self.timeout
+            )
+            return resp.json().get("value", {})
+        except Exception as e:
+            return {"error": str(e)}
+    
+    def stop_script(self) -> bool:
+        """
+        停止脚本执行
+        
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            resp = requests.post(
+                f"{self.base_url}/wda/script/stop",
+                timeout=self.timeout
+            )
+            return resp.status_code == 200
+        except:
+            return False
+    
+    # ========== 扩展 API (需要 ECWDA 扩展) ==========
+    
+    def find_color_native(self, color: str, region: Optional[Dict] = None, 
+                          tolerance: int = 10) -> Optional[Dict[str, int]]:
+        """
+        找色 (使用原生 API，更快)
+        
+        Args:
+            color: 颜色值
+            region: 查找区域
+            tolerance: 容差值
+            
+        Returns:
+            dict: 找到返回坐标
+        """
+        try:
+            payload = {"color": color, "tolerance": tolerance}
+            if region:
+                payload["region"] = region
+            
+            resp = requests.post(
+                f"{self.base_url}/wda/findColor",
+                json=payload,
+                timeout=self.timeout
+            )
+            data = resp.json().get("value", {})
+            if data.get("found"):
+                return {"x": data["x"], "y": data["y"]}
+        except:
+            pass
+        return None
+    
+    def get_pixel_native(self, x: int, y: int) -> Optional[Dict]:
+        """
+        获取像素颜色 (使用原生 API)
+        
+        Args:
+            x: X 坐标
+            y: Y 坐标
+            
+        Returns:
+            dict: 颜色信息
+        """
+        try:
+            resp = requests.post(
+                f"{self.base_url}/wda/pixel",
+                json={"x": x, "y": y},
+                timeout=self.timeout
+            )
+            return resp.json().get("value", {})
+        except:
+            return None
+    
+    def ocr_native(self, region: Optional[Dict] = None) -> List[Dict]:
+        """
+        OCR 文字识别 (使用原生 API)
+        
+        Args:
+            region: 识别区域
+            
+        Returns:
+            list: 识别结果
+        """
+        try:
+            payload = {}
+            if region:
+                payload["region"] = region
+            
+            resp = requests.post(
+                f"{self.base_url}/wda/ocr/recognize",
+                json=payload,
+                timeout=30  # OCR 可能需要更长时间
+            )
+            data = resp.json().get("value", {})
+            return data.get("texts", [])
+        except:
+            return []
 
 
 # 便捷函数

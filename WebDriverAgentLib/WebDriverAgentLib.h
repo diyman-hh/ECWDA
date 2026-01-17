@@ -20,13 +20,14 @@ FOUNDATION_EXPORT const unsigned char WebDriverAgentLib_VersionString[];
 #import <WebDriverAgentLib/FBCommandStatus.h>
 #import <WebDriverAgentLib/FBConfiguration.h>
 #import <WebDriverAgentLib/FBDebugLogDelegateDecorator.h>
+#import <WebDriverAgentLib/FBECWDACommands.h>
 #import <WebDriverAgentLib/FBElement.h>
 #import <WebDriverAgentLib/FBElementCache.h>
 #import <WebDriverAgentLib/FBElementTypeTransformer.h>
 #import <WebDriverAgentLib/FBErrorBuilder.h>
 #import <WebDriverAgentLib/FBExceptionHandler.h>
-#import <WebDriverAgentLib/FBHTTPStatusCodes.h>
 #import <WebDriverAgentLib/FBFailureProofTestCase.h>
+#import <WebDriverAgentLib/FBHTTPStatusCodes.h>
 #import <WebDriverAgentLib/FBKeyboard.h>
 #import <WebDriverAgentLib/FBLogger.h>
 #import <WebDriverAgentLib/FBMacros.h>
@@ -43,17 +44,17 @@ FOUNDATION_EXPORT const unsigned char WebDriverAgentLib_VersionString[];
 #import <WebDriverAgentLib/FBXPath.h>
 #import <WebDriverAgentLib/WebDriverAgentLib.h>
 #import <WebDriverAgentLib/XCDebugLogDelegate-Protocol.h>
-#import <WebDriverAgentLib/XCTestCase.h>
 #import <WebDriverAgentLib/XCTIssue+FBPatcher.h>
+#import <WebDriverAgentLib/XCTestCase.h>
 #import <WebDriverAgentLib/XCUIApplication+FBHelpers.h>
 #import <WebDriverAgentLib/XCUIDevice+FBHelpers.h>
 #import <WebDriverAgentLib/XCUIDevice+FBRotation.h>
-#import <WebDriverAgentLib/XCUIElement.h>
 #import <WebDriverAgentLib/XCUIElement+FBAccessibility.h>
 #import <WebDriverAgentLib/XCUIElement+FBFind.h>
+#import <WebDriverAgentLib/XCUIElement+FBForceTouch.h>
 #import <WebDriverAgentLib/XCUIElement+FBIsVisible.h>
 #import <WebDriverAgentLib/XCUIElement+FBScrolling.h>
-#import <WebDriverAgentLib/XCUIElement+FBForceTouch.h>
 #import <WebDriverAgentLib/XCUIElement+FBUtilities.h>
 #import <WebDriverAgentLib/XCUIElement+FBWebDriverAttributes.h>
-#import <WebDriverAgentLib/XCTIssue+FBPatcher.h>
+#import <WebDriverAgentLib/XCUIElement.h>
+
