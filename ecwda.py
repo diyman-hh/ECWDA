@@ -1033,6 +1033,248 @@ class ECWDA:
             return resp.status_code == 200
         except:
             return False
+    
+    # ========== Phase 3: 节点操作 ==========
+    
+    def find_node_by_text(self, text: str, partial: bool = True) -> List[Dict]:
+        """
+        通过文字查找节点
+        
+        Args:
+            text: 要查找的文字
+            partial: 是否部分匹配
+            
+        Returns:
+            list: 节点列表
+        """
+        try:
+            resp = requests.post(
+                f"{self.base_url}/wda/node/findByText",
+                json={"text": text, "partial": partial},
+                timeout=self.timeout
+            )
+            return resp.json().get("value", {}).get("nodes", [])
+        except:
+            return []
+    
+    def find_node_by_type(self, node_type: str) -> List[Dict]:
+        """
+        通过类型查找节点
+        
+        Args:
+            node_type: 节点类型 (button, textField, staticText, image, cell, link, switch, slider)
+            
+        Returns:
+            list: 节点列表
+        """
+        try:
+            resp = requests.post(
+                f"{self.base_url}/wda/node/findByType",
+                json={"type": node_type},
+                timeout=self.timeout
+            )
+            return resp.json().get("value", {}).get("nodes", [])
+        except:
+            return []
+    
+    def get_all_nodes(self) -> List[Dict]:
+        """
+        获取页面所有可交互节点
+        
+        Returns:
+            list: 节点列表
+        """
+        try:
+            resp = requests.get(
+                f"{self.base_url}/wda/node/all",
+                timeout=self.timeout
+            )
+            return resp.json().get("value", {}).get("nodes", [])
+        except:
+            return []
+    
+    def click_node(self, text: Optional[str] = None, node_type: Optional[str] = None, 
+                   index: int = 0) -> bool:
+        """
+        点击节点
+        
+        Args:
+            text: 节点文字
+            node_type: 节点类型
+            index: 索引
+            
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            payload = {"index": index}
+            if text:
+                payload["text"] = text
+            if node_type:
+                payload["type"] = node_type
+            
+            resp = requests.post(
+                f"{self.base_url}/wda/node/click",
+                json=payload,
+                timeout=self.timeout
+            )
+            return resp.status_code == 200
+        except:
+            return False
+    
+    def click_text(self, text: str) -> bool:
+        """
+        点击包含指定文字的节点
+        
+        Args:
+            text: 文字
+            
+        Returns:
+            bool: 是否成功
+        """
+        return self.click_node(text=text)
+    
+    # ========== Phase 3: 工具函数 ==========
+    
+    def random(self, min_val: int = 0, max_val: int = 100) -> int:
+        """
+        生成随机数
+        
+        Args:
+            min_val: 最小值
+            max_val: 最大值
+            
+        Returns:
+            int: 随机数
+        """
+        try:
+            resp = requests.post(
+                f"{self.base_url}/wda/utils/random",
+                json={"min": min_val, "max": max_val},
+                timeout=self.timeout
+            )
+            return resp.json().get("value", {}).get("value", 0)
+        except:
+            import random as rnd
+            return rnd.randint(min_val, max_val)
+    
+    def md5(self, text: str) -> str:
+        """
+        计算 MD5
+        
+        Args:
+            text: 文本
+            
+        Returns:
+            str: MD5 值
+        """
+        try:
+            resp = requests.post(
+                f"{self.base_url}/wda/utils/md5",
+                json={"text": text},
+                timeout=self.timeout
+            )
+            return resp.json().get("value", {}).get("md5", "")
+        except:
+            import hashlib
+            return hashlib.md5(text.encode()).hexdigest()
+    
+    def base64_encode(self, text: str) -> str:
+        """
+        Base64 编码
+        
+        Args:
+            text: 文本
+            
+        Returns:
+            str: 编码结果
+        """
+        try:
+            resp = requests.post(
+                f"{self.base_url}/wda/utils/base64/encode",
+                json={"text": text},
+                timeout=self.timeout
+            )
+            return resp.json().get("value", {}).get("result", "")
+        except:
+            return base64.b64encode(text.encode()).decode()
+    
+    def base64_decode(self, b64: str) -> str:
+        """
+        Base64 解码
+        
+        Args:
+            b64: Base64 字符串
+            
+        Returns:
+            str: 解码结果
+        """
+        try:
+            resp = requests.post(
+                f"{self.base_url}/wda/utils/base64/decode",
+                json={"base64": b64},
+                timeout=self.timeout
+            )
+            return resp.json().get("value", {}).get("result", "")
+        except:
+            return base64.b64decode(b64).decode()
+    
+    def vibrate(self) -> bool:
+        """
+        震动
+        
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            resp = requests.post(
+                f"{self.base_url}/wda/utils/vibrate",
+                timeout=self.timeout
+            )
+            return resp.status_code == 200
+        except:
+            return False
+    
+    def save_to_album(self, image_path: str) -> bool:
+        """
+        保存图片到相册
+        
+        Args:
+            image_path: 图片路径
+            
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            with open(image_path, "rb") as f:
+                image_base64 = base64.b64encode(f.read()).decode()
+            
+            resp = requests.post(
+                f"{self.base_url}/wda/utils/saveToAlbum",
+                json={"image": image_base64},
+                timeout=self.timeout
+            )
+            return resp.status_code == 200
+        except:
+            return False
+    
+    # ========== Phase 3: 应用管理 ==========
+    
+    def get_current_app(self) -> Dict:
+        """
+        获取当前应用信息
+        
+        Returns:
+            dict: 应用信息 {"bundleId", "processId", "state"}
+        """
+        try:
+            resp = requests.get(
+                f"{self.base_url}/wda/app/current",
+                timeout=self.timeout
+            )
+            return resp.json().get("value", {})
+        except:
+            return {}
 
 
 # 便捷函数

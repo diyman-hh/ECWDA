@@ -167,6 +167,85 @@
     [[FBRoute POST:@"/wda/openUrl"]
         respondWithTarget:self
                    action:@selector(handleOpenUrl:)],
+
+    // ===== Phase 3: 节点操作 =====
+
+    // 通过文字查找节点
+    [[FBRoute POST:@"/wda/node/findByText"].withoutSession
+        respondWithTarget:self
+                   action:@selector(handleFindNodeByText:)],
+    [[FBRoute POST:@"/wda/node/findByText"]
+        respondWithTarget:self
+                   action:@selector(handleFindNodeByText:)],
+
+    // 通过类型查找节点
+    [[FBRoute POST:@"/wda/node/findByType"].withoutSession
+        respondWithTarget:self
+                   action:@selector(handleFindNodeByType:)],
+    [[FBRoute POST:@"/wda/node/findByType"]
+        respondWithTarget:self
+                   action:@selector(handleFindNodeByType:)],
+
+    // 获取所有节点
+    [[FBRoute GET:@"/wda/node/all"].withoutSession
+        respondWithTarget:self
+                   action:@selector(handleGetAllNodes:)],
+    [[FBRoute GET:@"/wda/node/all"]
+        respondWithTarget:self
+                   action:@selector(handleGetAllNodes:)],
+
+    // 点击节点
+    [[FBRoute POST:@"/wda/node/click"].withoutSession
+        respondWithTarget:self
+                   action:@selector(handleClickNode:)],
+    [[FBRoute POST:@"/wda/node/click"]
+        respondWithTarget:self
+                   action:@selector(handleClickNode:)],
+
+    // ===== 工具函数 =====
+
+    // 随机数
+    [[FBRoute POST:@"/wda/utils/random"].withoutSession
+        respondWithTarget:self
+                   action:@selector(handleRandom:)],
+
+    // MD5
+    [[FBRoute POST:@"/wda/utils/md5"].withoutSession
+        respondWithTarget:self
+                   action:@selector(handleMD5:)],
+
+    // Base64 编码
+    [[FBRoute POST:@"/wda/utils/base64/encode"].withoutSession
+        respondWithTarget:self
+                   action:@selector(handleBase64Encode:)],
+
+    // Base64 解码
+    [[FBRoute POST:@"/wda/utils/base64/decode"].withoutSession
+        respondWithTarget:self
+                   action:@selector(handleBase64Decode:)],
+
+    // 震动
+    [[FBRoute POST:@"/wda/utils/vibrate"].withoutSession
+        respondWithTarget:self
+                   action:@selector(handleVibrate:)],
+
+    // 保存图片到相册
+    [[FBRoute POST:@"/wda/utils/saveToAlbum"].withoutSession
+        respondWithTarget:self
+                   action:@selector(handleSaveToAlbum:)],
+
+    // 获取当前应用信息
+    [[FBRoute GET:@"/wda/app/current"].withoutSession
+        respondWithTarget:self
+                   action:@selector(handleGetCurrentApp:)],
+    [[FBRoute GET:@"/wda/app/current"]
+        respondWithTarget:self
+                   action:@selector(handleGetCurrentApp:)],
+
+    // 获取已安装应用列表
+    [[FBRoute GET:@"/wda/app/list"].withoutSession
+        respondWithTarget:self
+                   action:@selector(handleGetAppList:)],
   ];
 }
 
@@ -1139,6 +1218,342 @@ static NSMutableArray *scriptLog = nil;
   });
 
   return FBResponseWithOK();
+}
+
+#pragma mark - Node Operations
+
++ (id<FBResponsePayload>)handleFindNodeByText:(FBRouteRequest *)request {
+  NSString *text = request.arguments[@"text"];
+  NSNumber *partial = request.arguments[@"partial"] ?: @YES;
+
+  if (!text) {
+    return FBResponseWithStatus([FBCommandStatus
+        invalidArgumentErrorWithMessage:@"text is required"
+                              traceback:nil]);
+  }
+
+  XCUIApplication *app =
+      request.session.activeApplication ?: XCUIApplication.fb_activeApplication;
+
+  NSMutableArray *results = [NSMutableArray array];
+  NSArray *elements;
+
+  if ([partial boolValue]) {
+    // 部分匹配
+    NSPredicate *predicate = [NSPredicate
+        predicateWithFormat:@"label CONTAINS[cd] %@ OR title CONTAINS[cd] %@ "
+                            @"OR value CONTAINS[cd] %@",
+                            text, text, text];
+    elements =
+        [app.descendants matchingPredicate:predicate].allElementsBoundByIndex;
+  } else {
+    // 精确匹配
+    NSPredicate *predicate = [NSPredicate
+        predicateWithFormat:@"label == %@ OR title == %@ OR value == %@", text,
+                            text, text];
+    elements =
+        [app.descendants matchingPredicate:predicate].allElementsBoundByIndex;
+  }
+
+  for (XCUIElement *element in elements) {
+    if (element.exists) {
+      CGRect frame = element.frame;
+      [results addObject:@{
+        @"type" : [self elementTypeString:element.elementType],
+        @"label" : element.label ?: @"",
+        @"value" : element.value ?: [NSNull null],
+        @"x" : @(frame.origin.x),
+        @"y" : @(frame.origin.y),
+        @"width" : @(frame.size.width),
+        @"height" : @(frame.size.height),
+        @"enabled" : @(element.isEnabled),
+        @"visible" : @(element.isHittable)
+      }];
+
+      if (results.count >= 20)
+        break; // 限制返回数量
+    }
+  }
+
+  return FBResponseWithObject(@{@"nodes" : results});
+}
+
++ (id<FBResponsePayload>)handleFindNodeByType:(FBRouteRequest *)request {
+  NSString *type = request.arguments[@"type"];
+
+  if (!type) {
+    return FBResponseWithStatus([FBCommandStatus
+        invalidArgumentErrorWithMessage:@"type is required"
+                              traceback:nil]);
+  }
+
+  XCUIApplication *app =
+      request.session.activeApplication ?: XCUIApplication.fb_activeApplication;
+
+  XCUIElementType elementType = [self elementTypeFromString:type];
+  NSArray *elements =
+      [app.descendants matchingType:elementType].allElementsBoundByIndex;
+
+  NSMutableArray *results = [NSMutableArray array];
+  for (XCUIElement *element in elements) {
+    if (element.exists) {
+      CGRect frame = element.frame;
+      [results addObject:@{
+        @"type" : type,
+        @"label" : element.label ?: @"",
+        @"value" : element.value ?: [NSNull null],
+        @"x" : @(frame.origin.x),
+        @"y" : @(frame.origin.y),
+        @"width" : @(frame.size.width),
+        @"height" : @(frame.size.height),
+        @"enabled" : @(element.isEnabled)
+      }];
+
+      if (results.count >= 50)
+        break;
+    }
+  }
+
+  return FBResponseWithObject(@{@"nodes" : results});
+}
+
++ (id<FBResponsePayload>)handleGetAllNodes:(FBRouteRequest *)request {
+  XCUIApplication *app =
+      request.session.activeApplication ?: XCUIApplication.fb_activeApplication;
+
+  // 获取页面源码的简化版本
+  NSMutableArray *results = [NSMutableArray array];
+
+  // 获取主要可交互元素
+  NSArray *types = @[
+    @(XCUIElementTypeButton), @(XCUIElementTypeTextField),
+    @(XCUIElementTypeStaticText), @(XCUIElementTypeImage),
+    @(XCUIElementTypeCell), @(XCUIElementTypeLink)
+  ];
+
+  for (NSNumber *typeNum in types) {
+    NSArray *elements = [app.descendants matchingType:typeNum.integerValue]
+                            .allElementsBoundByIndex;
+    for (XCUIElement *element in elements) {
+      if (element.exists && element.isHittable) {
+        CGRect frame = element.frame;
+        [results addObject:@{
+          @"type" : [self elementTypeString:typeNum.integerValue],
+          @"label" : element.label ?: @"",
+          @"x" : @(frame.origin.x),
+          @"y" : @(frame.origin.y),
+          @"width" : @(frame.size.width),
+          @"height" : @(frame.size.height)
+        }];
+
+        if (results.count >= 100)
+          break;
+      }
+    }
+    if (results.count >= 100)
+      break;
+  }
+
+  return FBResponseWithObject(@{@"nodes" : results});
+}
+
++ (id<FBResponsePayload>)handleClickNode:(FBRouteRequest *)request {
+  NSString *text = request.arguments[@"text"];
+  NSString *type = request.arguments[@"type"];
+  NSNumber *index = request.arguments[@"index"] ?: @0;
+
+  XCUIApplication *app =
+      request.session.activeApplication ?: XCUIApplication.fb_activeApplication;
+  XCUIElement *element = nil;
+
+  if (text) {
+    NSPredicate *predicate =
+        [NSPredicate predicateWithFormat:@"label CONTAINS[cd] %@", text];
+    NSArray *elements =
+        [app.descendants matchingPredicate:predicate].allElementsBoundByIndex;
+    if (elements.count > index.integerValue) {
+      element = elements[index.integerValue];
+    }
+  } else if (type) {
+    XCUIElementType elementType = [self elementTypeFromString:type];
+    NSArray *elements =
+        [app.descendants matchingType:elementType].allElementsBoundByIndex;
+    if (elements.count > index.integerValue) {
+      element = elements[index.integerValue];
+    }
+  }
+
+  if (!element || !element.exists) {
+    return FBResponseWithStatus([FBCommandStatus
+        noSuchElementErrorWithMessage:@"Element not found"
+                            traceback:nil]);
+  }
+
+  [element tap];
+  return FBResponseWithOK();
+}
+
++ (NSString *)elementTypeString:(XCUIElementType)type {
+  switch (type) {
+  case XCUIElementTypeButton:
+    return @"button";
+  case XCUIElementTypeTextField:
+    return @"textField";
+  case XCUIElementTypeStaticText:
+    return @"staticText";
+  case XCUIElementTypeImage:
+    return @"image";
+  case XCUIElementTypeCell:
+    return @"cell";
+  case XCUIElementTypeLink:
+    return @"link";
+  case XCUIElementTypeSwitch:
+    return @"switch";
+  case XCUIElementTypeSlider:
+    return @"slider";
+  case XCUIElementTypeTable:
+    return @"table";
+  case XCUIElementTypeScrollView:
+    return @"scrollView";
+  default:
+    return @"other";
+  }
+}
+
++ (XCUIElementType)elementTypeFromString:(NSString *)type {
+  if ([type isEqualToString:@"button"])
+    return XCUIElementTypeButton;
+  if ([type isEqualToString:@"textField"])
+    return XCUIElementTypeTextField;
+  if ([type isEqualToString:@"staticText"])
+    return XCUIElementTypeStaticText;
+  if ([type isEqualToString:@"image"])
+    return XCUIElementTypeImage;
+  if ([type isEqualToString:@"cell"])
+    return XCUIElementTypeCell;
+  if ([type isEqualToString:@"link"])
+    return XCUIElementTypeLink;
+  if ([type isEqualToString:@"switch"])
+    return XCUIElementTypeSwitch;
+  if ([type isEqualToString:@"slider"])
+    return XCUIElementTypeSlider;
+  if ([type isEqualToString:@"table"])
+    return XCUIElementTypeTable;
+  if ([type isEqualToString:@"scrollView"])
+    return XCUIElementTypeScrollView;
+  return XCUIElementTypeAny;
+}
+
+#pragma mark - Utility Functions
+
++ (id<FBResponsePayload>)handleRandom:(FBRouteRequest *)request {
+  NSNumber *min = request.arguments[@"min"] ?: @0;
+  NSNumber *max = request.arguments[@"max"] ?: @100;
+
+  NSInteger minVal = min.integerValue;
+  NSInteger maxVal = max.integerValue;
+  NSInteger random =
+      minVal + arc4random_uniform((uint32_t)(maxVal - minVal + 1));
+
+  return FBResponseWithObject(@{@"value" : @(random)});
+}
+
++ (id<FBResponsePayload>)handleMD5:(FBRouteRequest *)request {
+  NSString *text = request.arguments[@"text"];
+  if (!text) {
+    return FBResponseWithStatus([FBCommandStatus
+        invalidArgumentErrorWithMessage:@"text is required"
+                              traceback:nil]);
+  }
+
+  // MD5 计算
+  const char *cStr = [text UTF8String];
+  unsigned char digest[CC_MD5_DIGEST_LENGTH];
+  CC_MD5(cStr, (CC_LONG)strlen(cStr), digest);
+
+  NSMutableString *output =
+      [NSMutableString stringWithCapacity:CC_MD5_DIGEST_LENGTH * 2];
+  for (int i = 0; i < CC_MD5_DIGEST_LENGTH; i++) {
+    [output appendFormat:@"%02x", digest[i]];
+  }
+
+  return FBResponseWithObject(@{@"md5" : output});
+}
+
++ (id<FBResponsePayload>)handleBase64Encode:(FBRouteRequest *)request {
+  NSString *text = request.arguments[@"text"];
+  if (!text) {
+    return FBResponseWithStatus([FBCommandStatus
+        invalidArgumentErrorWithMessage:@"text is required"
+                              traceback:nil]);
+  }
+
+  NSData *data = [text dataUsingEncoding:NSUTF8StringEncoding];
+  NSString *base64 = [data base64EncodedStringWithOptions:0];
+
+  return FBResponseWithObject(@{@"result" : base64});
+}
+
++ (id<FBResponsePayload>)handleBase64Decode:(FBRouteRequest *)request {
+  NSString *base64 = request.arguments[@"base64"];
+  if (!base64) {
+    return FBResponseWithStatus([FBCommandStatus
+        invalidArgumentErrorWithMessage:@"base64 is required"
+                              traceback:nil]);
+  }
+
+  NSData *data = [[NSData alloc] initWithBase64EncodedString:base64 options:0];
+  NSString *text = [[NSString alloc] initWithData:data
+                                         encoding:NSUTF8StringEncoding];
+
+  return FBResponseWithObject(@{@"result" : text ?: @""});
+}
+
++ (id<FBResponsePayload>)handleVibrate:(FBRouteRequest *)request {
+  // 使用 AudioServicesPlaySystemSound 进行震动
+  AudioServicesPlaySystemSound(kSystemSoundID_Vibrate);
+  return FBResponseWithOK();
+}
+
++ (id<FBResponsePayload>)handleSaveToAlbum:(FBRouteRequest *)request {
+  NSString *base64 = request.arguments[@"image"];
+  if (!base64) {
+    return FBResponseWithStatus([FBCommandStatus
+        invalidArgumentErrorWithMessage:@"image is required"
+                              traceback:nil]);
+  }
+
+  NSData *imageData = [[NSData alloc] initWithBase64EncodedString:base64
+                                                          options:0];
+  UIImage *image = [UIImage imageWithData:imageData];
+
+  if (!image) {
+    return FBResponseWithStatus([FBCommandStatus
+        invalidArgumentErrorWithMessage:@"Invalid image data"
+                              traceback:nil]);
+  }
+
+  UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil);
+  return FBResponseWithOK();
+}
+
+#pragma mark - App Management
+
++ (id<FBResponsePayload>)handleGetCurrentApp:(FBRouteRequest *)request {
+  XCUIApplication *app =
+      request.session.activeApplication ?: XCUIApplication.fb_activeApplication;
+
+  return FBResponseWithObject(@{
+    @"bundleId" : app.bundleID ?: @"",
+    @"processId" : @(app.processID),
+    @"state" : @(app.state)
+  });
+}
+
++ (id<FBResponsePayload>)handleGetAppList:(FBRouteRequest *)request {
+  // 获取已安装应用列表需要私有 API，这里返回一个简化版本
+  return FBResponseWithObject(
+      @{@"apps" : @[], @"note" : @"Full app list requires private APIs"});
 }
 
 @end
