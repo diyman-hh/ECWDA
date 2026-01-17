@@ -20,7 +20,6 @@ FOUNDATION_EXPORT const unsigned char WebDriverAgentLib_VersionString[];
 #import <WebDriverAgentLib/FBCommandStatus.h>
 #import <WebDriverAgentLib/FBConfiguration.h>
 #import <WebDriverAgentLib/FBDebugLogDelegateDecorator.h>
-#import <WebDriverAgentLib/FBECWDACommands.h>
 #import <WebDriverAgentLib/FBElement.h>
 #import <WebDriverAgentLib/FBElementCache.h>
 #import <WebDriverAgentLib/FBElementTypeTransformer.h>
@@ -57,4 +56,3 @@ FOUNDATION_EXPORT const unsigned char WebDriverAgentLib_VersionString[];
 #import <WebDriverAgentLib/XCUIElement+FBUtilities.h>
 #import <WebDriverAgentLib/XCUIElement+FBWebDriverAttributes.h>
 #import <WebDriverAgentLib/XCUIElement.h>
-
