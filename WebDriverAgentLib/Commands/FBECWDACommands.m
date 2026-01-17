@@ -5,18 +5,26 @@
 
 #import "FBECWDACommands.h"
 
+#import <AudioToolbox/AudioToolbox.h>
+#import <CommonCrypto/CommonDigest.h>
+#import <CoreML/CoreML.h>
+#import <Vision/Vision.h>
 #import <XCTest/XCUIDevice.h>
 #import <XCTest/XCUIScreen.h>
 
-#import "FBApplication.h"
-#import "FBCommandHandler.h"
+
 #import "FBConfiguration.h"
+#import "FBResponsePayload.h"
 #import "FBRoute.h"
 #import "FBRouteRequest.h"
 #import "FBSession.h"
+#import "FBXCodeCompatibility.h"
 #import "XCUIApplication+FBHelpers.h"
+#import "XCUIApplication.h"
 #import "XCUIDevice+FBHelpers.h"
-#import "XCUIScreen+FBSnapshot.h"
+#import "XCUIElement.h"
+#import "XCUIElementQuery.h"
+
 
 @implementation FBECWDACommands
 
