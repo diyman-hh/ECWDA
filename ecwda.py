@@ -764,6 +764,275 @@ class ECWDA:
             return data.get("texts", [])
         except:
             return []
+    
+    # ========== Phase 2: 找图功能 ==========
+    
+    def find_image(self, template_path: str, region: Optional[Dict] = None,
+                   threshold: float = 0.9) -> Optional[Dict]:
+        """
+        找图 (使用原生 API)
+        
+        Args:
+            template_path: 模板图片路径
+            region: 查找区域
+            threshold: 匹配阈值 (0-1)
+            
+        Returns:
+            dict: 找到返回 {"x", "y", "width", "height"}
+        """
+        try:
+            # 读取模板图片并转为 base64
+            with open(template_path, "rb") as f:
+                template_base64 = base64.b64encode(f.read()).decode()
+            
+            payload = {"template": template_base64, "threshold": threshold}
+            if region:
+                payload["region"] = region
+            
+            resp = requests.post(
+                f"{self.base_url}/wda/findImage",
+                json=payload,
+                timeout=30
+            )
+            data = resp.json().get("value", {})
+            if data.get("found"):
+                return {
+                    "x": data["x"],
+                    "y": data["y"],
+                    "width": data["width"],
+                    "height": data["height"]
+                }
+        except Exception as e:
+            print(f"找图失败: {e}")
+        return None
+    
+    def click_image(self, template_path: str, region: Optional[Dict] = None,
+                    threshold: float = 0.9) -> bool:
+        """
+        点击找到的图片
+        
+        Args:
+            template_path: 模板图片路径
+            region: 查找区域
+            threshold: 匹配阈值
+            
+        Returns:
+            bool: 是否成功
+        """
+        pos = self.find_image(template_path, region, threshold)
+        if pos:
+            center_x = pos["x"] + pos["width"] // 2
+            center_y = pos["y"] + pos["height"] // 2
+            return self.click(center_x, center_y)
+        return False
+    
+    # ========== Phase 2: 二维码识别 ==========
+    
+    def decode_qrcode(self, region: Optional[Dict] = None) -> List[Dict]:
+        """
+        识别屏幕上的二维码
+        
+        Args:
+            region: 识别区域
+            
+        Returns:
+            list: 二维码列表 [{"text": "...", "x", "y", "width", "height"}]
+        """
+        try:
+            payload = {}
+            if region:
+                payload["region"] = region
+            
+            resp = requests.post(
+                f"{self.base_url}/wda/qrcode/decode",
+                json=payload,
+                timeout=30
+            )
+            data = resp.json().get("value", {})
+            return data.get("codes", [])
+        except:
+            return []
+    
+    # ========== Phase 2: 剪贴板 ==========
+    
+    def get_clipboard(self) -> str:
+        """
+        获取剪贴板内容
+        
+        Returns:
+            str: 剪贴板文本
+        """
+        try:
+            resp = requests.get(
+                f"{self.base_url}/wda/clipboard",
+                timeout=self.timeout
+            )
+            return resp.json().get("value", {}).get("content", "")
+        except:
+            return ""
+    
+    def set_clipboard(self, content: str) -> bool:
+        """
+        设置剪贴板内容
+        
+        Args:
+            content: 文本内容
+            
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            resp = requests.post(
+                f"{self.base_url}/wda/clipboard",
+                json={"content": content},
+                timeout=self.timeout
+            )
+            return resp.status_code == 200
+        except:
+            return False
+    
+    # ========== Phase 2: 文件操作 ==========
+    
+    def get_sandbox_path(self) -> Dict[str, str]:
+        """
+        获取沙盒目录路径
+        
+        Returns:
+            dict: {"documents", "caches", "tmp"}
+        """
+        try:
+            resp = requests.get(
+                f"{self.base_url}/wda/file/sandbox",
+                timeout=self.timeout
+            )
+            return resp.json().get("value", {})
+        except:
+            return {}
+    
+    def read_file(self, path: str) -> Optional[str]:
+        """
+        读取文件
+        
+        Args:
+            path: 文件路径
+            
+        Returns:
+            str: 文件内容
+        """
+        try:
+            resp = requests.post(
+                f"{self.base_url}/wda/file/read",
+                json={"path": path},
+                timeout=self.timeout
+            )
+            return resp.json().get("value", {}).get("content")
+        except:
+            return None
+    
+    def write_file(self, path: str, content: str) -> bool:
+        """
+        写入文件
+        
+        Args:
+            path: 文件路径
+            content: 内容
+            
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            resp = requests.post(
+                f"{self.base_url}/wda/file/write",
+                json={"path": path, "content": content},
+                timeout=self.timeout
+            )
+            return resp.json().get("value", {}).get("success", False)
+        except:
+            return False
+    
+    def list_files(self, path: str) -> List[Dict]:
+        """
+        列出目录内容
+        
+        Args:
+            path: 目录路径
+            
+        Returns:
+            list: 文件列表
+        """
+        try:
+            resp = requests.post(
+                f"{self.base_url}/wda/file/list",
+                json={"path": path},
+                timeout=self.timeout
+            )
+            return resp.json().get("value", {}).get("files", [])
+        except:
+            return []
+    
+    def delete_file(self, path: str) -> bool:
+        """
+        删除文件
+        
+        Args:
+            path: 文件路径
+            
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            resp = requests.post(
+                f"{self.base_url}/wda/file/delete",
+                json={"path": path},
+                timeout=self.timeout
+            )
+            return resp.json().get("value", {}).get("success", False)
+        except:
+            return False
+    
+    # ========== Phase 2: 文本输入 ==========
+    
+    def input_text(self, text: str) -> bool:
+        """
+        输入文本（需要先点击输入框）
+        
+        Args:
+            text: 文本内容
+            
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            resp = requests.post(
+                f"{self.base_url}/wda/inputText",
+                json={"text": text},
+                timeout=self.timeout
+            )
+            return resp.status_code == 200
+        except:
+            return False
+    
+    # ========== Phase 2: 打开 URL ==========
+    
+    def open_url(self, url: str) -> bool:
+        """
+        打开 URL（跳转到浏览器或 App）
+        
+        Args:
+            url: URL 地址
+            
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            resp = requests.post(
+                f"{self.base_url}/wda/openUrl",
+                json={"url": url},
+                timeout=self.timeout
+            )
+            return resp.status_code == 200
+        except:
+            return False
 
 
 # 便捷函数
