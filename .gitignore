@@ -53,3 +53,7 @@ WebDriverAgentRunner-Runner.app/
 
 # Ruby
 Gemfile.lock
+
+# 本地资源目录
+IOS资源/
+ipa/
