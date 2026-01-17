@@ -9,7 +9,7 @@
 #import <Vision/Vision.h>
 #import <XCTest/XCTest.h>
 
-
+#import "FBCommandStatus.h"
 #import "FBConfiguration.h"
 #import "FBResponsePayload.h"
 #import "FBRoute.h"
@@ -21,6 +21,10 @@
 #import "XCUIDevice+FBHelpers.h"
 #import "XCUIElement+FBFind.h"
 
+
+@interface FBECWDACommands (Private)
++ (NSInteger)parseColor:(NSString *)colorStr;
+@end
 
 @implementation FBECWDACommands
 
