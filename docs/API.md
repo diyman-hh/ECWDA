@@ -399,3 +399,101 @@ if __name__ == "__main__":
 | 返回主屏幕 | POST | `/wda/homescreen` |
 | 启动应用 | POST | `/session/{id}/wda/apps/launch` |
 | 关闭应用 | POST | `/session/{id}/wda/apps/terminate` |
+
+---
+
+## 八、脱机模式 (ECWDA 扩展)
+
+脱机模式允许 ECMAIN 将脚本发送到 ECWDA 执行，无需电脑持续连接。
+
+### executeScript 执行脚本
+在设备上执行一系列命令。
+
+**参数：**
+- `commands` (list): 命令列表
+- `script_id` (str, optional): 脚本 ID
+
+**支持的命令：**
+- `tap`: 点击 - `{"action": "tap", "params": {"x": 100, "y": 200}}`
+- `swipe`: 滑动 - `{"action": "swipe", "params": {"fromX": 200, "fromY": 600, "toX": 200, "toY": 200}}`
+- `sleep`: 等待 - `{"action": "sleep", "params": {"seconds": 1.0}}`
+- `home`: 返回主屏幕 - `{"action": "home", "params": {}}`
+
+**示例：**
+```python
+# 执行自动化脚本
+result = ec.execute_script([
+    {"action": "tap", "params": {"x": 100, "y": 200}},
+    {"action": "sleep", "params": {"seconds": 1}},
+    {"action": "swipe", "params": {"fromX": 200, "fromY": 600, "toX": 200, "toY": 200}},
+    {"action": "home", "params": {}}
+], script_id="test-001")
+
+print(f"脚本状态: {result}")
+```
+
+---
+
+### getScriptStatus 获取脚本状态
+
+**示例：**
+```python
+# 检查脚本执行状态
+status = ec.get_script_status()
+print(f"正在运行: {status['running']}")
+print(f"执行日志: {status['log']}")
+```
+
+---
+
+### stopScript 停止脚本
+
+**示例：**
+```python
+# 停止当前脚本
+ec.stop_script()
+```
+
+---
+
+## 九、ECWDA 扩展 API
+
+以下 API 需要编译安装 ECWDA 扩展模块后才能使用。
+
+### findColorNative 原生找色
+使用设备端算法找色，比 Python 客户端更快。
+
+**示例：**
+```python
+# 使用原生 API 找色
+pos = ec.find_color_native("#FF5500", tolerance=10)
+if pos:
+    ec.click(pos['x'], pos['y'])
+```
+
+---
+
+### getPixelNative 原生获取像素
+
+**示例：**
+```python
+# 获取像素颜色
+color = ec.get_pixel_native(100, 200)
+print(f"颜色: {color['color']}, R={color['r']}, G={color['g']}, B={color['b']}")
+```
+
+---
+
+### ocrNative 原生 OCR 识别
+使用 iOS Vision Framework 进行文字识别 (需要 iOS 13+)。
+
+**示例：**
+```python
+# 全屏 OCR
+texts = ec.ocr_native()
+for t in texts:
+    print(f"文字: {t['text']}, 置信度: {t['confidence']}, 位置: ({t['x']}, {t['y']})")
+
+# 区域 OCR
+texts = ec.ocr_native(region={"x": 0, "y": 100, "width": 375, "height": 200})
+```
